@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>劍與遠征迷宮路線</title>
+        <style>
+            .node-label-row {
+                display: flex;
+                align-items: center;
+                margin: 5px 0px;
+            }
+            .node-label {
+                font-size: 2em;
+                font-weight: bold;
+                padding: 0px 10px;
+            }
+            .title {
+                font-size: 2em;
+                text-align: center;
+                font-weight: bold;
+            }
+            .node {
+                border: 3px black solid;
+                padding: 32px;
+                display: inline-block;
+                border-radius: 50%;
+                margin: 3px 15px;
+            }
+            .carriage {
+                background-color: #a348a3; /* purple */
+            }
+            .spa {
+                background-color: skyblue;/* skyblue */
+            }
+            .business {
+                background-color: #25af4a; /* green */
+            }
+            .redflag {
+                background-color: #ed1b24; /* red */
+            }
+            .brownflag {
+                background-color: #be7856; /* brown */
+            }
+            .revival {
+                background-color: pink; /* pink */
+            }
+            .goblin {
+                background-color: black; /* black */
+            }
+            .wraith-carriage {
+                background-color: gray; /* gray */
+            }
+            .node-level-column {
+                width: 280px;
+                margin-right: 70px;
+            }
+            .node-level-list {
+                width: 100%;
+            }
+            .node-level-row {
+                margin: 10px 0px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .node .switch {
+                position: absolute;
+                width: 100px;
+                transform-origin: left center;
+                margin-top: -3px;
+                display: none;
+                pointer-events: none;
+            }
+            .switch .switchBar {
+                background: red;
+                padding: 3px 0px;
+                height: 0px;
+            }
+            .node.haveSwitch {
+                box-shadow: yellow 5px;
+            }
+            .node.haveSwitch .switch {
+                display: block;
+            }
+            .switch-dot {
+                border-radius: 50%;
+                background-color: red;
+                padding: 5px;
+                position: absolute;
+                margin-top: -2px;
+                margin-left: -5px;
+            }
+            .switch-left {
+                transform: rotate(-120deg);
+            }
+            .switch-right {
+                transform: rotate(-60deg);
+            }
+        </style>
+    </head>
+    <body>
+        <div style="display: flex">
+            <div id="labels" class="node-label-column">
+                <div class="node-label-row">
+                    <span class="node carriage" data-type="carriage"></span>
+                    <span class="node-label">馬車</span>
+                </div>
+                <div class="node-label-row">
+                    <span class="node spa" data-type="spa"></span>
+                    <span class="node-label">溫泉</span>
+                </div>
+                <div class="node-label-row">
+                    <span class="node business" data-type="business"></span>
+                    <span class="node-label">商人</span>
+                </div>
+                <div class="node-label-row">
+                    <span class="node redflag" data-type="redflag"></span>
+                    <span class="node-label">紅旗</span>
+                </div>
+                <div class="node-label-row">
+                    <span class="node brownflag" data-type="brownflag"></span>
+                    <span class="node-label">棕旗</span>
+                </div>
+                <div class="node-label-row">
+                    <span class="node revival" data-type="revival"></span>
+                    <span class="node-label">復活</span>
+                </div>
+                <div class="node-label-row">
+                    <span class="node goblin" data-type="goblin"></span>
+                    <span class="node-label">哥布林</span>
+                </div>
+                <div class="node-label-row">
+                    <span class="node wraith-carriage" data-type="wraith-carriage"></span>
+                    <span class="node-label">怨靈馬車</span>
+                </div>
+                <div class="node-label-row">
+                    <span class="node switch" data-type="switch" style="border: none; position: relative;">
+                        <div style="border: 3px red solid;position: absolute;width: 100%;left: 0px"></div>
+                    </span>
+                    <span class="node-label">推薦路線</span>
+                </div>
+            </div>
+            <div id="stages" style="display: flex;"></div>
+        </div>
+        <div style="display: none">
+            <div id="node-level-template" class="node-level-column">
+                <div class="title" contenteditable="true">第一層</div>
+                <div class="node-level-list"></div>
+            </div>
+            <div id="node-template">
+                <div class="switch">
+                    <div class="switch-dot"></div>
+                    <div class="switchBar"></div>
+                </div>
+            </div>
+        </div>
+        <script>
+            const $ = id => document.getElementById(id);
+            const create = tag => document.createElement(tag);
+            let currentLabel = '';
+            let labelNodes = $('labels').getElementsByClassName('node');
+            for (let i = 0; i < labelNodes.length; i++) {
+                labelNodes[i].addEventListener('click', e => (currentLabel = e.currentTarget.dataset.type));
+            }
+            class Stage {
+                dom;
+                listDom;
+                levelTemplate = [];
+                roads = [];
+                nodes = [];
+                constructor(options) {
+                    if (!options.dom) return console.error('cannot no dom');
+                    this.dom = options.dom;
+                    this.listDom = this.dom.getElementsByClassName('node-level-list')[0];
+                    if (options.title) {
+                        let title = this.dom.getElementsByClassName('title')[0];
+                        title.innerText = options.title;
+                    }
+                    if (options.levelTemplate) {
+                        this.levelTemplate = options.levelTemplate;
+                    }
+                    this.render();
+                }
+                makeStep(row) {
+                    let rows = this.roads[row];
+                    let col = rows.findIndex(a => a);
+                    let nextRow = this.roads[row - 1];
+                    let thisNode = this.nodes[row][col];
+                    let nextCol = nextRow.findIndex(a => a);
+                    if (nextCol === -1) return thisNode.classList.remove('haveSwitch');
+                    if (nextCol >= 0) {
+                        if (rows.length == 1) {
+                            // nextRow.length must be 2
+                            if (nextCol == 0) thisNode.classList.add('switch-left');
+                            else if (nextCol == 1) thisNode.classList.add('switch-right');
+                            else thisNode.classList.remove('haveSwitch');
+                        } else if (rows.length == 2) {
+                            if (nextRow.length == 1) {
+                                if (col == 0) thisNode.classList.add('switch-right');
+                                else if (col == 1) thisNode.classList.add('switch-left');
+                                else thisNode.classList.remove('haveSwitch');
+                            } else if (nextRow.length == 3) {
+                                if (col == 0) {
+                                    if (nextCol == 0) thisNode.classList.add('switch-left');
+                                    else if (nextCol == 1) thisNode.classList.add('switch-right');
+                                    else thisNode.classList.remove('haveSwitch');
+                                } else if (col == 1) {
+                                    if (nextCol == 1) thisNode.classList.add('switch-left');
+                                    else if (nextCol == 2) thisNode.classList.add('switch-right');
+                                    else thisNode.classList.remove('haveSwitch');
+                                }
+                            }
+                        } else if (rows.length == 3) {
+                            // nextRow.length must be 2
+                            if (col == 0) {
+                                if (nextCol == 0) thisNode.classList.add('switch-right');
+                                else thisNode.classList.remove('haveSwitch');
+                            } else if (col == 1) {
+                                if (nextCol == 0) thisNode.classList.add('switch-left');
+                                else if (nextCol == 1) thisNode.classList.add('switch-right');
+                                else thisNode.classList.remove('haveSwitch');
+                            } else if (col == 2) {
+                                if (nextCol == 1) thisNode.classList.add('switch-left');
+                                else thisNode.classList.remove('haveSwitch');
+                            }
+                        }
+                    }
+                }
+                render() {
+                    this.levelTemplate.forEach((levels, rowIndex) => {
+                        let road = [];
+                        let nodeLine = [];
+                        let row = create('div');
+                        row.className = 'node-level-row';
+                        levels.forEach((level, colIndex) => {
+                            let node = $('node-template').cloneNode(true);
+                            node.id = '';
+                            node.dataset.row = rowIndex;
+                            node.dataset.col = colIndex;
+                            node.dataset.type = level;
+                            node.className = 'node ' + level;
+                            node.addEventListener('click', e => {
+                                if (currentLabel == '') return;
+                                if (currentLabel == 'switch') {
+                                    let row = e.currentTarget.dataset.row;
+                                    if (row == 0 || row == this.roads.length - 1) return;
+                                    let col = e.currentTarget.dataset.col;
+                                    let rows = this.roads[row];
+                                    for (let i = 0; i < rows.length; i++) {
+                                        let thisNode = this.nodes[row][i];
+                                        thisNode.classList.remove('switch-left');
+                                        thisNode.classList.remove('switch-right');
+                                        if (i != col) {
+                                            this.roads[row][i] = false;
+                                            thisNode.classList.remove('haveSwitch');
+                                        } else {
+                                            this.roads[row][i] = true;
+                                            thisNode.classList.add('haveSwitch');
+                                        }
+                                    }
+                                    this.makeStep(row);
+                                    if (row < this.roads.length - 1) {
+                                        row++;
+                                        rows = this.roads[row];
+                                        col = rows.findIndex(a => a);
+                                        for (let i = 0; i < rows.length; i++) {
+                                            this.nodes[row][i].classList.remove('switch-left');
+                                            this.nodes[row][i].classList.remove('switch-right');
+                                            if (i != col) {
+                                                this.roads[row][i] = false;
+                                                this.nodes[row][i].classList.remove('haveSwitch');
+                                            } else {
+                                                let thisNode = this.nodes[row][i];
+                                                this.roads[row][i] = true;
+                                                thisNode.classList.add('haveSwitch');
+                                            }
+                                        }
+                                        this.makeStep(row);
+                                    }
+                                } else {
+                                    node.classList.remove(node.dataset.type);
+                                    node.dataset.type = currentLabel;
+                                    node.classList.add(node.dataset.type);
+                                }
+                            });
+                            row.appendChild(node);
+                            nodeLine.push(node);
+                            road.push(false);
+                        });
+                        if (levels.length == 1) road[0] = true;
+                        this.roads.push(road);
+                        this.nodes.push(nodeLine);
+                        this.listDom.appendChild(row);
+                    });
+                }
+            }
+            let stageDom = $('node-level-template').cloneNode(true);
+            stageDom.id = '';
+            $('stages').appendChild(stageDom);
+            new Stage({
+                dom: stageDom,
+                title: '第一層',
+                levelTemplate: [
+                    ['end'],
+                    ['spa', 'revival'],
+                    ['redflag', 'carriage', 'brownflag'],
+                    ['spa', 'redflag'],
+                    ['redflag', 'brownflag', 'brownflag'],
+                    ['brownflag', 'spa'],
+                    ['brownflag', 'brownflag', 'redflag'],
+                    ['redflag', 'carriage'],
+                    ['brownflag', 'carriage', 'redflag'],
+                    ['carriage', 'brownflag'],
+                    ['start'],
+                ],
+            });
+            stageDom = $('node-level-template').cloneNode(true);
+            stageDom.id = '';
+            $('stages').appendChild(stageDom);
+            new Stage({
+                dom: stageDom,
+                title: '第二層',
+                levelTemplate: [
+                    ['end'],
+                    ['revival', 'spa'],
+                    ['redflag', 'carriage', 'redflag'],
+                    ['brownflag', 'redflag'],
+                    ['brownflag', 'redflag', 'spa'],
+                    ['redflag', 'brownflag'],
+                    ['business', 'carriage', 'brownflag'],
+                    ['carriage', 'spa'],
+                    ['brownflag', 'redflag', 'redflag'],
+                    ['spa', 'redflag'],
+                    ['start'],
+                ],
+            });
+            stageDom = $('node-level-template').cloneNode(true);
+            stageDom.id = '';
+            $('stages').appendChild(stageDom);
+            new Stage({
+                dom: stageDom,
+                title: '困難',
+                levelTemplate: [
+                    ['end'],
+                    ['revival', 'spa'],
+                    ['redflag', 'redflag', 'redflag'],
+                    ['redflag', 'goblin'],
+                    ['redflag', 'redflag', 'redflag'],
+                    ['brownflag', 'brownflag'],
+                    ['redflag', 'redflag', 'redflag'],
+                    ['business', 'spa'],
+                    ['wraith-carriage', 'brownflag', 'brownflag'],
+                    ['revival', 'spa'],
+                    ['start'],
+                ],
+            });
+        </script>
+    </body>
+</html>
